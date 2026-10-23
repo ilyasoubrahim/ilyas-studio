@@ -1,0 +1,18 @@
+{
+  "name": "Ilyas Studio — Mini Game Maker",
+  "short_name": "Ilyas Studio",
+  "description": "Build, test and export your own 2D games.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#09090d",
+  "theme_color": "#ff304f",
+  "icons": [
+    {
+      "src": "./ilyas-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
