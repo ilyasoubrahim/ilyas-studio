@@ -8,6 +8,8 @@ const palette=[
 {type:'down',label:'move down continuously',group:'MOVEMENT',color:'motion',icon:'↧'},
 {type:'keyright',label:'when RIGHT arrow pressed, move',group:'MOVEMENT',color:'motion',icon:'→'},
 {type:'keyleft',label:'when LEFT arrow pressed, move',group:'MOVEMENT',color:'motion',icon:'←'},
+{type:'keyup',label:'when UP arrow pressed, move',group:'MOVEMENT',color:'motion',icon:'↑'},
+{type:'keydown',label:'when DOWN arrow pressed, move',group:'MOVEMENT',color:'motion',icon:'↓'},
 {type:'speed',label:'set movement speed',group:'PROPERTIES',color:'looks',icon:'⚙',value:180},
 {type:'color',label:'change character color',group:'PROPERTIES',color:'looks',icon:'●',value:'#ff4657'},
 {type:'say',label:'show a text message',group:'EVENTS',color:'event',icon:'💬',value:'Hello, game!'},
