@@ -5,7 +5,7 @@ A browser-based **2D game creation prototype** with a scene editor, object libra
 ## Quick start
 1. Open the published GitHub Pages site or open `index.html` in a modern desktop browser.
 2. Choose a starter template or select **New project**.
-3. Add objects from **Object Library** or drag an object into the scene.
+3. Choose **AI Combat Arena** to try the new top-down combat starter, or add objects from **Object Library**.
 4. Click an object to select it. Drag to move it; drag a corner handle to resize it.
 5. Change its position, dimensions, color, rotation, visibility, layer, speed, and behaviors in **Inspector**.
 6. For text objects, edit the displayed text in the Inspector. Use **Import image** to add a sprite.
@@ -19,6 +19,13 @@ A browser-based **2D game creation prototype** with a scene editor, object libra
 - `Ctrl+Z` / `Ctrl+Y`: undo / redo
 - Arrow keys: nudge selected object; `Shift` + arrow: move by 10 pixels
 - `Ctrl+S`: save; `Space`: play / stop; `Esc`: stop playtest
+
+## Python combat starter
+- Choose **AI Combat Arena** from the dashboard to create a ready-to-play combat project with one player and three enemies.
+- Move with **WASD** or the **arrow keys**; press **E** to attack an enemy in range.
+- The player and enemies have health. Defeating an enemy awards 10 points; when player HP reaches zero, the playtest ends.
+- Open **Python → Templates** to insert **Enemy AI Pro** (patrol, detection, chase, timed attacks, health, and state colors) or **Player Combat Controller** into another project. Attach scripts to the relevant objects before pressing **Run Game**.
+- The scripting API includes `ilyas.get_self()` for the object a script is attached to and `ilyas.get_viewport_size()` for canvas dimensions.
 
 ## Publish with GitHub Pages
 1. Open **Settings → Pages** in this repository.
