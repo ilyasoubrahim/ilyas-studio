@@ -74,6 +74,8 @@ function runVisualBlocks(objs,dt,now){
    else if(b.type==='down')o.y=Math.min(project.height-o.h/2,o.y+(Number(o.speed)||180)*dt);
    else if(b.type==='keyright'&&(keys.ArrowRight||keys.d))o.x=Math.min(project.width-o.w/2,o.x+(Number(o.speed)||180)*dt);
    else if(b.type==='keyleft'&&(keys.ArrowLeft||keys.a))o.x=Math.max(o.w/2,o.x-(Number(o.speed)||180)*dt);
+   else if(b.type==='keyup'&&(keys.ArrowUp||keys.w))o.y=Math.max(o.h/2,o.y-(Number(o.speed)||180)*dt);
+   else if(b.type==='keydown'&&(keys.ArrowDown||keys.s))o.y=Math.min(project.height-o.h/2,o.y+(Number(o.speed)||180)*dt);
   }
  }
 }
