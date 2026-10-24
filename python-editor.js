@@ -167,6 +167,94 @@ class EnemyStateMachine:
         if self.state == "chase":
             enemy.move_toward(player, 70 * delta)
 `},
+{id:'enemy-ai-pro',name:'Enemy AI Pro',category:'Enemy AI',desc:'A reusable enemy brain with patrol, detection, chase, timed attacks, health, and visual state changes.',required:'Attach to an Enemy object; add a Player object.',code:`# @export speed: float = 105
+# @export detection_range: float = 280
+# @export attack_range: float = 42
+# @export attack_damage: int = 10
+# @export attack_cooldown: float = 0.9
+# @export max_health: int = 60
+# @export patrol_range: float = 90
+# @export patrol_speed: float = 1.2
+class EnemyAIPro:
+    def ready(self):
+        self.speed = ilyas.export("speed", 105)
+        self.detection_range = ilyas.export("detection_range", 280)
+        self.attack_range = ilyas.export("attack_range", 42)
+        self.attack_damage = ilyas.export("attack_damage", 10)
+        self.attack_cooldown = ilyas.export("attack_cooldown", 0.9)
+        self.max_health = ilyas.export("max_health", 60)
+        self.patrol_range = ilyas.export("patrol_range", 90)
+        self.patrol_speed = ilyas.export("patrol_speed", 1.2)
+        self.attack_timer = 0
+        self.origin_x = None
+        self.origin_y = None
+        self.state = "patrol"
+        enemy = ilyas.get_self()
+        if enemy is not None:
+            self.origin_x, self.origin_y = enemy.x, enemy.y
+            enemy.health = self.max_health
+            enemy.color = "#ff745e"
+            ilyas.log(enemy.name + " AI ready")
+    def update(self, delta):
+        enemy = ilyas.get_self()
+        player = ilyas.get_player()
+        if enemy is None or player is None or player.health <= 0: return
+        if self.origin_x is None:
+            self.origin_x, self.origin_y = enemy.x, enemy.y
+        self.attack_timer = max(0, self.attack_timer - delta)
+        distance = enemy.distance_to(player)
+        if distance <= self.attack_range:
+            self.state = "attack"
+            enemy.color = "#ff334f"
+            if self.attack_timer <= 0:
+                player.health = max(0, player.health - self.attack_damage)
+                self.attack_timer = self.attack_cooldown
+                ilyas.log(enemy.name + " attacked! Player HP: " + str(int(player.health)))
+        elif distance <= self.detection_range:
+            self.state = "chase"
+            enemy.color = "#ffb14d"
+            enemy.move_toward(player, self.speed * delta)
+        else:
+            self.state = "patrol"
+            enemy.color = "#ff745e"
+            enemy.x = self.origin_x + math.sin(ilyas.get_time() * self.patrol_speed) * self.patrol_range
+            enemy.y = self.origin_y + math.sin(ilyas.get_time() * self.patrol_speed * 0.7) * self.patrol_range * 0.22
+`},
+{id:'player-combat',name:'Player Combat Controller',category:'Combat',desc:'Top-down movement plus a melee attack on E. Defeated enemies award score.',required:'Attach to a Player; use with Enemy AI Pro scripts.',code:`# @export speed: float = 210
+# @export attack_damage: int = 25
+# @export attack_range: float = 92
+# @export attack_cooldown: float = 0.35
+class PlayerCombatController:
+    def ready(self):
+        self.speed = ilyas.export("speed", 210)
+        self.attack_damage = ilyas.export("attack_damage", 25)
+        self.attack_range = ilyas.export("attack_range", 92)
+        self.attack_cooldown = ilyas.export("attack_cooldown", 0.35)
+        self.attack_timer = 0
+        ilyas.log("Player combat ready — move with WASD/arrows, attack with E")
+    def update(self, delta):
+        player = ilyas.get_self()
+        if player is None or player.health <= 0: return
+        dx = int(ilyas.get_input("right")) - int(ilyas.get_input("left"))
+        dy = int(ilyas.get_input("down")) - int(ilyas.get_input("up"))
+        length = max((dx*dx + dy*dy) ** 0.5, 1)
+        width, height = ilyas.get_viewport_size()
+        player.x = max(player.width/2, min(width-player.width/2, player.x + dx/length*self.speed*delta))
+        player.y = max(player.height/2, min(height-player.height/2, player.y + dy/length*self.speed*delta))
+        self.attack_timer = max(0, self.attack_timer - delta)
+        if ilyas.get_input("dash_pressed") and self.attack_timer <= 0:
+            candidates = [enemy for enemy in ilyas.get_nodes_by_type("Enemy") if enemy.health > 0 and player.distance_to(enemy) <= self.attack_range]
+            if candidates:
+                enemy = min(candidates, key=lambda node: player.distance_to(node))
+                enemy.health = max(0, enemy.health - self.attack_damage)
+                enemy.color = "#ff334f"
+                ilyas.log("Hit " + enemy.name + " — HP: " + str(int(enemy.health)))
+                if enemy.health <= 0:
+                    ilyas.destroy(enemy)
+                    ilyas.add_score(10)
+                    ilyas.log(enemy.name + " defeated! +10 score")
+            self.attack_timer = self.attack_cooldown
+`},
 {id:'score',name:'Score Display Helper',category:'Collectibles',desc:'Log the current score when the script starts.',required:'Any object',code:`class ScoreReporter:
     def ready(self):
         ilyas.log("Current score: " + str(ilyas.get_score()))
@@ -200,6 +288,8 @@ function renderProperties(){const root=$('#pyProperties'),s=activeScript();if(!s
 function renderExportFields(){const root=$('#pyExportFields'),s=activeScript();if(!root||!s)return;const exp=extractExports(s.code);s.exports={...exp,...s.exports};root.innerHTML='';const entries=Object.entries(exp);if(!entries.length){root.innerHTML='<div class="py-property-note">No exported values found in this script.</div>';return}entries.forEach(([name,def])=>{let value=s.exports[name]??def,wrap=document.createElement('div');wrap.innerHTML='<label class="py-prop-label">'+esc(name)+' <small style="color:#666">('+typeof def+')</small></label>';let input;if(typeof def==='boolean'){input=document.createElement('input');input.type='checkbox';input.checked=!!value;input.style.accentColor='#ff4657'}else{input=document.createElement('input');input.className='py-prop-input';input.type=typeof def==='number'?'number':'text';input.value=value}input.setAttribute('aria-label',name);input.onchange=()=>{s.exports[name]=typeof def==='boolean'?input.checked:typeof def==='number'?Number(input.value):input.value;persistScripts();addConsole('Updated exported variable '+name,'info')};wrap.append(input);root.append(wrap)})}
 const apiDocs=[
 ['ilyas.get_node(name)','Find an object by exact name in the current scene. Returns None if missing.'],
+['ilyas.get_self()','Return the object this script is attached to; useful when several enemies share one script.'],
+['ilyas.get_viewport_size()','Return (width, height) of the active game canvas.'],
 ['ilyas.get_nodes_by_type(type_name)','Return all scene objects of a given type.'],
 ['ilyas.get_player()','Return the first object whose type is Player.'],
 ['ilyas.get_input(action)','Read left, right, up, down, jump / jump_pressed and dash_pressed input states.'],
@@ -312,6 +402,11 @@ class _Node:
         return False
     def queue_free(self): __commands.append({"op":"destroy","id":self.id})
 class _Ilyas:
+    def get_self(self):
+        for d in __state.get("objects",[]):
+            if d.get("id")==__self_id: return _Node(d)
+        return None
+    def get_viewport_size(self): return (float(__state.get("width",960)),float(__state.get("height",540)))
     def get_node(self,name):
         for d in __state.get("objects",[]):
             if d.get("name")==name: return _Node(d)
@@ -360,7 +455,7 @@ self.onmessage=async ev=>{
  const start=performance.now();
  try{
   let c=contexts.get(m.scriptId);
-  const setInputs=(g)=>{g.set("__state_json",JSON.stringify(m.state||{}));g.set("__inputs_json",JSON.stringify(m.inputs||{}));g.set("__exports_json",JSON.stringify(m.exports||{}));g.set("__dt_value",Number(m.dt)||0.016);g.set("__clock_value",Number(m.time)||0);g.set("__name__","__main__");};
+  const setInputs=(g)=>{g.set("__state_json",JSON.stringify(m.state||{}));g.set("__self_id",m.objectId||"");g.set("__inputs_json",JSON.stringify(m.inputs||{}));g.set("__exports_json",JSON.stringify(m.exports||{}));g.set("__dt_value",Number(m.dt)||0.016);g.set("__clock_value",Number(m.time)||0);g.set("__name__","__main__");};
   if(!c||c.source!==m.code){if(c&&c.globals)c.globals.destroy();const g=pyodide.globals.get("dict")();c={globals:g,source:m.code,instanceName:null,ready:false};contexts.set(m.scriptId,c);g.set("__user_code",m.code);g.set("__executed",false);setInputs(g);await pyodide.runPythonAsync(PRELUDE,{globals:g});}
   const g=c.globals;setInputs(g);
   await pyodide.runPythonAsync(PRELUDE,{globals:g});
@@ -421,7 +516,7 @@ function inputs(){const b=bridge();return{left:b?.input('left')||false,right:b?.
 function runMessage(s,phase='run',object=null,dt=.016,extra={}){if(state.runtime!=='ready'){if(phase==='run')addConsole('Python runtime is not ready yet.','warning');if(state.runtime==='idle'||state.runtime==='error')initRuntime();return}if(state.busy){if(phase==='run')addConsole('A script is already running. Stop it before starting another.','warning');return}if(phase==='run')saveCode();state.busy=true;if(phase==='run'){$('#pyRun').disabled=true;$('#pyStop').disabled=false;$('#pyStatusLeft').textContent='Running '+s.name+'…'}const runId=++state.runId;state.worker.postMessage({type:'run',runId,scriptId:s.id,objectId:object?.id||null,objectName:object?.name||'',otherName:extra.otherName||'',action:extra.action||'',phase,code:s.code,exports:s.exports||extractExports(s.code),state:safeState(),inputs:inputs(),dt,time:performance.now()/1000});clearTimeout(state.timeout);state.timeout=setTimeout(()=>{if(state.busy&&runId===state.runId){stopScript('Execution timed out. Worker terminated to keep the editor responsive.');addConsole('Script exceeded the 2-second execution limit and was stopped.','error','Execution timeout')}},2200)}
 function stopScript(message='Script stopped by user.'){clearTimeout(state.timeout);state.busy=false;state.runId++;try{state.worker?.terminate()}catch{}state.worker=null;if(state.workerUrl)URL.revokeObjectURL(state.workerUrl);state.workerUrl=null;state.runtime='idle';$('#pyRun').disabled=false;$('#pyStop').disabled=true;$('#pyRuntimeDot').classList.remove('ready');$('#pyLanguage').textContent='Python runtime stopped';$('#pyStatusLeft').textContent='Stopped';addConsole(message,'warning');initRuntime()}
 function runActive(){const s=activeScript();if(!s){addConsole('Create or open a script first.','warning');return}runMessage(s,'run',null,.016)}
-function tickScripts(){if(!bridge()?.getRunning())return;const p=project(),attached=(p?.objects||[]).filter(o=>o.scriptId);if(!attached.length)return;if(state.runtime!=='ready'){if(state.runtime==='idle'||state.runtime==='error')initRuntime();return}if(state.busy)return;const now=performance.now();if(now-state.lastTick<70)return;state.lastTick=now;for(const obj of attached){const s=scripts().find(x=>x.id===obj.scriptId);if(s)runMessage(s,'update',obj,Math.min(.07,(now-(state.instances[obj.id]||now))/1000||.016));state.instances[obj.id]=now;if(state.busy)break}}
+function tickScripts(){if(!bridge()?.getRunning())return;const p=project(),attached=(p?.objects||[]).filter(o=>o.scriptId);if(!attached.length)return;if(state.runtime!=='ready'){if(state.runtime==='idle'||state.runtime==='error')initRuntime();return}if(state.busy)return;const now=performance.now();if(now-state.lastTick<70)return;state.lastTick=now;for(const obj of attached){const s=scripts().find(x=>x.id===obj.scriptId);if(!s)continue;const previous=state.instances[obj.id]||now;state.instances[obj.id]=now;state.queue.push({s,phase:'update',obj,dt:Math.min(.25,(now-previous)/1000||.016),extra:{}})}drainQueue()}
 function undoCode(){const s=activeScript();if(!s||!state.history.length)return;state.future.push($('#pyCode').value);$('#pyCode').value=state.history.pop();s.code=$('#pyCode').value;paintEditor();persistScripts();updateUndoButtons()}
 function redoCode(){const s=activeScript();if(!s||!state.future.length)return;state.history.push($('#pyCode').value);$('#pyCode').value=state.future.pop();s.code=$('#pyCode').value;paintEditor();persistScripts();updateUndoButtons()}
 function updateUndoButtons(){$('#pyUndo').disabled=!state.history.length;$('#pyRedo').disabled=!state.future.length}
@@ -429,6 +524,6 @@ function formatCode(){const el=$('#pyCode');let code=el.value.split('\n').map(li
 function findNext(){const el=$('#pyCode'),q=$('#pyFindInput').value;if(!q)return;let idx=el.value.indexOf(q,el.selectionEnd);if(idx<0)idx=el.value.indexOf(q);if(idx<0){addConsole('No match found for: '+q,'warning');return}el.focus();el.setSelectionRange(idx,idx+q.length);updateCursor()}
 function replaceOne(){const el=$('#pyCode'),q=$('#pyFindInput').value,r=$('#pyReplaceInput').value;if(!q)return;if(el.value.slice(el.selectionStart,el.selectionEnd)===q){el.setRangeText(r,el.selectionStart,el.selectionEnd,'end');markDirty()}else findNext()}
 function bind(){const btn=$('#pythonEditorBtn');btn.onclick=showWorkspace;$('#pyBack').onclick=hideWorkspace;$('#pyScenesFolder').onclick=()=>{$('#pyScenesList').classList.toggle('hidden');$('#pyScenesFolder').firstChild.textContent=$('#pyScenesList').classList.contains('hidden')?'▸':'▾'};$('#pyAssetsFolder').onclick=()=>{$('#pyAssetsList').classList.toggle('hidden');$('#pyAssetsFolder').firstChild.textContent=$('#pyAssetsList').classList.contains('hidden')?'▸':'▾'};$('#pyNew').onclick=()=>createScript();$('#pyNewSmall').onclick=()=>createScript();$('#pyCreateScript').onclick=()=>createScript();$('#pyExamples').onclick=showTemplates;$('#pyTemplates').onclick=showTemplates;$('#pyTemplateSearch').oninput=renderTemplates;$('#pyModalClose').onclick=()=>$('#pyTemplateModal').classList.add('hidden');$('#pyAttach').onclick=attachToSelected;$('#pyPlayGame').onclick=()=>bridge()?.startPlay();$('#pyStopGame').onclick=()=>bridge()?.stopPlay();$('#pyRestartGame').onclick=()=>bridge()?.restartPlay();$('#pyPauseGame').onclick=()=>bridge()?.pausePlay();$('#pyResumeGame').onclick=()=>bridge()?.resumePlay();$('#pyPauseGameOverlay').onclick=()=>bridge()?.pausePlay();$('#pyResumeGameOverlay').onclick=()=>bridge()?.resumePlay();$('#pyRun').onclick=runActive;$('#pyStop').onclick=()=>stopScript();$('#pySearch').oninput=renderScriptList;$('#pyCode').addEventListener('input',()=>{const s=activeScript();if(s){state.history.push(s.code||'');if(state.history.length>150)state.history.shift();state.future=[];updateUndoButtons()}markDirty();renderExportFields()});$('#pyCode').addEventListener('scroll',()=>{$('#pyHighlight').scrollTop=$('#pyCode').scrollTop;$('#pyHighlight').scrollLeft=$('#pyCode').scrollLeft;$('#pyLineNumbers').scrollTop=$('#pyCode').scrollTop});$('#pyCode').addEventListener('click',updateCursor);$('#pyCode').addEventListener('keyup',updateCursor);$('#pyCode').addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();const el=e.target,start=el.selectionStart,end=el.selectionEnd;el.setRangeText('    ',start,end,'end');markDirty()}if(e.key==='Enter'){const el=e.target,at=el.selectionStart,line=el.value.slice(0,at).split('\n').pop(),indent=(line.match(/^\s*/)||[''])[0]+(/:\s*$/.test(line)?'    ':'');e.preventDefault();el.setRangeText('\n'+indent,at,el.selectionEnd,'end');markDirty()}if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();runActive()}if(e.ctrlKey&&e.key.toLowerCase()==='s'){e.preventDefault();saveCode()}if(e.ctrlKey&&e.key.toLowerCase()==='f'){e.preventDefault();$('#pyFindBar').classList.remove('hidden');$('#pyFindInput').focus()}if(e.ctrlKey&&e.key.toLowerCase()==='z'){e.preventDefault();undoCode()}if(e.ctrlKey&&e.key.toLowerCase()==='y'){e.preventDefault();redoCode()}});$('#pyUndo').onclick=undoCode;$('#pyRedo').onclick=redoCode;$('#pyFormat').onclick=formatCode;$('#pyFindBtn').onclick=()=>$('#pyFindBar').classList.toggle('hidden');$('#pyFindNext').onclick=findNext;$('#pyReplace').onclick=replaceOne;$('#pyFindClose').onclick=()=>$('#pyFindBar').classList.add('hidden');$$('[data-pyconsole]').forEach(b=>b.onclick=()=>{$$('[data-pyconsole]').forEach(x=>x.classList.toggle('active',x===b));state.filter=b.dataset.pyconsole;filterConsole()});$('#pyClearConsole').onclick=()=>{$('#pyConsole').innerHTML='<div class="py-console-empty">Console cleared.</div>';$('#pyConsoleCount').textContent='0 messages';state.lastError=''};$('#pyCopyError').onclick=()=>{if(!state.lastError){addConsole('There is no error to copy.','warning');return}navigator.clipboard?.writeText(state.lastError).then(()=>toast('Error details copied')).catch(()=>{const t=document.createElement('textarea');t.value=state.lastError;document.body.append(t);t.select();document.execCommand('copy');t.remove();toast('Error details copied')})};document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();state.open?hideWorkspace():showWorkspace()}if(state.open&&e.key==='Escape'&&$('#pyTemplateModal').classList.contains('hidden'))hideWorkspace()});window.addEventListener('beforeunload',()=>{if(state.open)saveCode()});document.addEventListener('keydown',e=>{if(!bridge()?.getRunning())return;const map={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',' ':'jump_pressed',e:'dash_pressed'};const action=map[e.key]||null;if(action)emitInput(action)});setInterval(tickScripts,70)}
-function drainQueue(){if(state.busy||!state.queue.length||state.runtime!=='ready')return;const e=state.queue.shift();runMessage(e.s,e.phase,e.obj,.016,e.extra||{})}function emitCollision(objectId,otherName){if(!bridge()?.getRunning())return;const obj=(bridge()?.getGameState().objects||[]).find(o=>o.id===objectId);if(!obj?.scriptId)return;const s=scripts().find(x=>x.id===obj.scriptId);if(s){const e={s,phase:'collision',obj,extra:{otherName}};if(state.busy)state.queue.push(e);else runMessage(s,e.phase,obj,.016,e.extra)}}function emitInput(action){if(!bridge()?.getRunning()||state.runtime!=='ready')return;for(const obj of (project()?.objects||[]).filter(o=>o.scriptId)){const s=scripts().find(x=>x.id===obj.scriptId);if(s){const e={s,phase:'input',obj,extra:{action}};if(state.busy)state.queue.push(e);else runMessage(s,e.phase,obj,.016,e.extra)}}}window.IlyasPythonEditor={open:showWorkspace,openScript,attachToSelected,run:runActive,emitCollision,emitInput};
+function drainQueue(){if(state.busy||!state.queue.length||state.runtime!=='ready')return;const e=state.queue.shift();if(e.phase==='update'&&!bridge()?.getRunning()){drainQueue();return}runMessage(e.s,e.phase,e.obj,e.dt??.016,e.extra||{})}function emitCollision(objectId,otherName){if(!bridge()?.getRunning())return;const obj=(bridge()?.getGameState().objects||[]).find(o=>o.id===objectId);if(!obj?.scriptId)return;const s=scripts().find(x=>x.id===obj.scriptId);if(s){const e={s,phase:'collision',obj,extra:{otherName}};if(state.busy)state.queue.push(e);else runMessage(s,e.phase,obj,.016,e.extra)}}function emitInput(action){if(!bridge()?.getRunning()||state.runtime!=='ready')return;for(const obj of (project()?.objects||[]).filter(o=>o.scriptId)){const s=scripts().find(x=>x.id===obj.scriptId);if(s){const e={s,phase:'input',obj,extra:{action}};if(state.busy)state.queue.push(e);else runMessage(s,e.phase,obj,.016,e.extra)}}}window.IlyasPythonEditor={open:showWorkspace,openScript,attachToSelected,run:runActive,emitCollision,emitInput};
 bind();
 })();
