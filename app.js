@@ -57,21 +57,17 @@ function runVisualBlocks(objs,dt,now){
  for(const o of objs){
   const bs=Array.isArray(o.visualBlocks)?o.visualBlocks:[];
   if(!bs.length)continue;
-  const st=game.blockState[o.id]||(game.blockState[o.id]={started:false,waits:{}});
-  if(!st.started){
-   for(const b of bs){
-    if(b.type==='score'){game.score+=Math.max(1,Math.min(100000,Number(b.value)||10));$('#playScore').textContent='Score: '+game.score}
-    if(b.type==='color')o.color=b.value||o.color;
-    if(b.type==='speed')o.speed=Math.max(1,Math.min(1000,Number(b.value)||180));
-    if(b.type==='say'){game.message=String(b.value||'');game.messageUntil=now+2600}
-   }
-   st.started=true;
-  }
-  let waiting=false;
+  const st=game.blockState[o.id]||(game.blockState[o.id]={done:{},waits:{}});
   for(const b of bs){
+   if(b.type==='start'){st.done[b.uid]=true;continue}
+   if(['score','color','speed','say'].includes(b.type)&&st.done[b.uid])continue;
+   if(b.type==='score'){game.score+=Math.max(1,Math.min(100000,Number(b.value)||10));$('#playScore').textContent='Score: '+game.score;st.done[b.uid]=true;continue}
+   if(b.type==='color'){o.color=b.value||o.color;st.done[b.uid]=true;continue}
+   if(b.type==='speed'){o.speed=Math.max(1,Math.min(1000,Number(b.value)||180));st.done[b.uid]=true;continue}
+   if(b.type==='say'){game.message=String(b.value||'');game.messageUntil=now+2600;st.done[b.uid]=true;continue}
    if(b.type==='wait'){
     if(st.waits[b.uid]===undefined)st.waits[b.uid]=Math.max(.1,Math.min(3600,Number(b.value)||1));
-    if(st.waits[b.uid]>0){st.waits[b.uid]=Math.max(0,st.waits[b.uid]-dt);waiting=true;break}
+    if(st.waits[b.uid]>0){st.waits[b.uid]=Math.max(0,st.waits[b.uid]-dt);break}
     continue;
    }
    if(b.type==='right')o.x=Math.min(project.width-o.w/2,o.x+(Number(o.speed)||180)*dt);
@@ -123,7 +119,7 @@ function gameFrame(now){
   for(let i=0;i<objs.length;i++)for(let j=i+1;j<objs.length;j++){
    const a=objs[i],b=objs[j];if(!a.alive||!b.alive)continue;
    const touching=Math.abs(a.x-b.x)<(a.w+b.w)/2-2&&Math.abs(a.y-b.y)<(a.h+b.h)/2-2;
-   if(touching){const key=[a.id,b.id].sort().join(':');if(!game.scriptContacts.has(key)){game.scriptContacts.add(key);applyTouchBlocks(a,b)}}
+   const key=[a.id,b.id].sort().join(':');if(touching){if(!game.scriptContacts.has(key)){game.scriptContacts.add(key);applyTouchBlocks(a,b)}}else game.scriptContacts.delete(key);
   }
   if(player){
    for(const o of objs){
