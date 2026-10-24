@@ -167,6 +167,94 @@ class EnemyStateMachine:
         if self.state == "chase":
             enemy.move_toward(player, 70 * delta)
 `},
+{id:'enemy-ai-pro',name:'Enemy AI Pro',category:'Enemy AI',desc:'A reusable enemy brain with patrol, detection, chase, timed attacks, health, and visual state changes.',required:'Attach to an Enemy object; add a Player object.',code:`# @export speed: float = 105
+# @export detection_range: float = 280
+# @export attack_range: float = 42
+# @export attack_damage: int = 10
+# @export attack_cooldown: float = 0.9
+# @export max_health: int = 60
+# @export patrol_range: float = 90
+# @export patrol_speed: float = 1.2
+class EnemyAIPro:
+    def ready(self):
+        self.speed = ilyas.export("speed", 105)
+        self.detection_range = ilyas.export("detection_range", 280)
+        self.attack_range = ilyas.export("attack_range", 42)
+        self.attack_damage = ilyas.export("attack_damage", 10)
+        self.attack_cooldown = ilyas.export("attack_cooldown", 0.9)
+        self.max_health = ilyas.export("max_health", 60)
+        self.patrol_range = ilyas.export("patrol_range", 90)
+        self.patrol_speed = ilyas.export("patrol_speed", 1.2)
+        self.attack_timer = 0
+        self.origin_x = None
+        self.origin_y = None
+        self.state = "patrol"
+        enemy = ilyas.get_self()
+        if enemy is not None:
+            self.origin_x, self.origin_y = enemy.x, enemy.y
+            enemy.health = self.max_health
+            enemy.color = "#ff745e"
+            ilyas.log(enemy.name + " AI ready")
+    def update(self, delta):
+        enemy = ilyas.get_self()
+        player = ilyas.get_player()
+        if enemy is None or player is None or player.health <= 0: return
+        if self.origin_x is None:
+            self.origin_x, self.origin_y = enemy.x, enemy.y
+        self.attack_timer = max(0, self.attack_timer - delta)
+        distance = enemy.distance_to(player)
+        if distance <= self.attack_range:
+            self.state = "attack"
+            enemy.color = "#ff334f"
+            if self.attack_timer <= 0:
+                player.health = max(0, player.health - self.attack_damage)
+                self.attack_timer = self.attack_cooldown
+                ilyas.log(enemy.name + " attacked! Player HP: " + str(int(player.health)))
+        elif distance <= self.detection_range:
+            self.state = "chase"
+            enemy.color = "#ffb14d"
+            enemy.move_toward(player, self.speed * delta)
+        else:
+            self.state = "patrol"
+            enemy.color = "#ff745e"
+            enemy.x = self.origin_x + math.sin(ilyas.get_time() * self.patrol_speed) * self.patrol_range
+            enemy.y = self.origin_y + math.sin(ilyas.get_time() * self.patrol_speed * 0.7) * self.patrol_range * 0.22
+`},
+{id:'player-combat',name:'Player Combat Controller',category:'Combat',desc:'Top-down movement plus a melee attack on E. Defeated enemies award score.',required:'Attach to a Player; use with Enemy AI Pro scripts.',code:`# @export speed: float = 210
+# @export attack_damage: int = 25
+# @export attack_range: float = 92
+# @export attack_cooldown: float = 0.35
+class PlayerCombatController:
+    def ready(self):
+        self.speed = ilyas.export("speed", 210)
+        self.attack_damage = ilyas.export("attack_damage", 25)
+        self.attack_range = ilyas.export("attack_range", 92)
+        self.attack_cooldown = ilyas.export("attack_cooldown", 0.35)
+        self.attack_timer = 0
+        ilyas.log("Player combat ready — move with WASD/arrows, attack with E")
+    def update(self, delta):
+        player = ilyas.get_self()
+        if player is None or player.health <= 0: return
+        dx = int(ilyas.get_input("right")) - int(ilyas.get_input("left"))
+        dy = int(ilyas.get_input("down")) - int(ilyas.get_input("up"))
+        length = max((dx*dx + dy*dy) ** 0.5, 1)
+        width, height = ilyas.get_viewport_size()
+        player.x = max(player.width/2, min(width-player.width/2, player.x + dx/length*self.speed*delta))
+        player.y = max(player.height/2, min(height-player.height/2, player.y + dy/length*self.speed*delta))
+        self.attack_timer = max(0, self.attack_timer - delta)
+        if ilyas.get_input("dash_pressed") and self.attack_timer <= 0:
+            candidates = [enemy for enemy in ilyas.get_nodes_by_type("Enemy") if enemy.health > 0 and player.distance_to(enemy) <= self.attack_range]
+            if candidates:
+                enemy = min(candidates, key=lambda node: player.distance_to(node))
+                enemy.health = max(0, enemy.health - self.attack_damage)
+                enemy.color = "#ff334f"
+                ilyas.log("Hit " + enemy.name + " — HP: " + str(int(enemy.health)))
+                if enemy.health <= 0:
+                    ilyas.destroy(enemy)
+                    ilyas.add_score(10)
+                    ilyas.log(enemy.name + " defeated! +10 score")
+            self.attack_timer = self.attack_cooldown
+`},
 {id:'score',name:'Score Display Helper',category:'Collectibles',desc:'Log the current score when the script starts.',required:'Any object',code:`class ScoreReporter:
     def ready(self):
         ilyas.log("Current score: " + str(ilyas.get_score()))
@@ -200,6 +288,8 @@ function renderProperties(){const root=$('#pyProperties'),s=activeScript();if(!s
 function renderExportFields(){const root=$('#pyExportFields'),s=activeScript();if(!root||!s)return;const exp=extractExports(s.code);s.exports={...exp,...s.exports};root.innerHTML='';const entries=Object.entries(exp);if(!entries.length){root.innerHTML='<div class="py-property-note">No exported values found in this script.</div>';return}entries.forEach(([name,def])=>{let value=s.exports[name]??def,wrap=document.createElement('div');wrap.innerHTML='<label class="py-prop-label">'+esc(name)+' <small style="color:#666">('+typeof def+')</small></label>';let input;if(typeof def==='boolean'){input=document.createElement('input');input.type='checkbox';input.checked=!!value;input.style.accentColor='#ff4657'}else{input=document.createElement('input');input.className='py-prop-input';input.type=typeof def==='number'?'number':'text';input.value=value}input.setAttribute('aria-label',name);input.onchange=()=>{s.exports[name]=typeof def==='boolean'?input.checked:typeof def==='number'?Number(input.value):input.value;persistScripts();addConsole('Updated exported variable '+name,'info')};wrap.append(input);root.append(wrap)})}
 const apiDocs=[
 ['ilyas.get_node(name)','Find an object by exact name in the current scene. Returns None if missing.'],
+['ilyas.get_self()','Return the object this script is attached to; useful when several enemies share one script.'],
+['ilyas.get_viewport_size()','Return (width, height) of the active game canvas.'],
 ['ilyas.get_nodes_by_type(type_name)','Return all scene objects of a given type.'],
 ['ilyas.get_player()','Return the first object whose type is Player.'],
 ['ilyas.get_input(action)','Read left, right, up, down, jump / jump_pressed and dash_pressed input states.'],
@@ -312,6 +402,11 @@ class _Node:
         return False
     def queue_free(self): __commands.append({"op":"destroy","id":self.id})
 class _Ilyas:
+    def get_self(self):
+        for d in __state.get("objects",[]):
+            if d.get("id")==__self_id: return _Node(d)
+        return None
+    def get_viewport_size(self): return (float(__state.get("width",960)),float(__state.get("height",540)))
     def get_node(self,name):
         for d in __state.get("objects",[]):
             if d.get("name")==name: return _Node(d)
@@ -360,7 +455,7 @@ self.onmessage=async ev=>{
  const start=performance.now();
  try{
   let c=contexts.get(m.scriptId);
-  const setInputs=(g)=>{g.set("__state_json",JSON.stringify(m.state||{}));g.set("__inputs_json",JSON.stringify(m.inputs||{}));g.set("__exports_json",JSON.stringify(m.exports||{}));g.set("__dt_value",Number(m.dt)||0.016);g.set("__clock_value",Number(m.time)||0);g.set("__name__","__main__");};
+  const setInputs=(g)=>{g.set("__state_json",JSON.stringify(m.state||{}));g.set("__self_id",m.objectId||"");g.set("__inputs_json",JSON.stringify(m.inputs||{}));g.set("__exports_json",JSON.stringify(m.exports||{}));g.set("__dt_value",Number(m.dt)||0.016);g.set("__clock_value",Number(m.time)||0);g.set("__name__","__main__");};
   if(!c||c.source!==m.code){if(c&&c.globals)c.globals.destroy();const g=pyodide.globals.get("dict")();c={globals:g,source:m.code,instanceName:null,ready:false};contexts.set(m.scriptId,c);g.set("__user_code",m.code);g.set("__executed",false);setInputs(g);await pyodide.runPythonAsync(PRELUDE,{globals:g});}
   const g=c.globals;setInputs(g);
   await pyodide.runPythonAsync(PRELUDE,{globals:g});
